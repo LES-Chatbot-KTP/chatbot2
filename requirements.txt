@@ -1,0 +1,7 @@
+# Core dependencies
+openai>=1.0.0
+faiss-cpu>=1.7.4
+numpy>=1.24.0
+
+# Testing
+pytest>=7.4.0
