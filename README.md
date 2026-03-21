@@ -1,6 +1,6 @@
 # 🤖 Chatbot — RAG + Django + Gemini + React
 
-Sistema de chatbot organizado em **monorepo**, com frontend em React, backend em Django REST Framework, autenticação JWT e suporte a **RAG (Retrieval-Augmented Generation)** com a **Gemini API**.
+Sistema de chatbot organizado em **monorepo**, com frontend em React, backend em Django REST Framework, autenticação JWT, banco de dados **PostgreSQL com pgvector** e suporte a **RAG (Retrieval-Augmented Generation)** com a **Gemini API**.
 
 ---
 
@@ -8,13 +8,12 @@ Sistema de chatbot organizado em **monorepo**, com frontend em React, backend em
 
 - [Visão Geral](#visão-geral)
 - [Estrutura do Projeto](#estrutura-do-projeto)
-- [O que cada parte faz](#o-que-cada-parte-faz)
 - [Tecnologias Utilizadas](#tecnologias-utilizadas)
-- [Como o backend funciona](#como-o-backend-funciona)
 - [Requisitos](#requisitos)
 - [Como rodar o projeto](#como-rodar-o-projeto)
-- [Configuração do Django](#configuração-do-django)
+- [Configuração do PostgreSQL + Docker](#configuração-do-postgresql--docker)
 - [Variáveis de Ambiente](#variáveis-de-ambiente)
+- [Configuração do Django](#configuração-do-django)
 - [Rotas da API](#rotas-da-api)
 - [Autenticação JWT](#autenticação-jwt)
 - [Testando com Postman](#testando-com-postman)
@@ -33,217 +32,80 @@ Este projeto é organizado como um **monorepo**: frontend e backend ficam no mes
 | Interface web | React + JavaScript | `frontend/` |
 | API e chatbot | Python + Django REST Framework | `Backend/` |
 | Configuração Django | Django | `config/` |
+| Banco de dados | PostgreSQL 16 + pgvector | Docker |
 | Ponto de entrada | Django CLI | `manage.py` |
 
 ---
 
 ## Estrutura do Projeto
 
-```text
+```
 Chatbot/
 ├── frontend/                         # Interface web em React
-│   ├── public/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Login.jsx
-│   │   │   └── admin/
-│   │   │       ├── DocumentsList.jsx
-│   │   │       ├── DocumentCreate.jsx
-│   │   │       ├── DocumentEdit.jsx
-│   │   │       └── Categories.jsx
-│   │   ├── components/
-│   │   │   ├── Layout.jsx
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── DocumentForm.jsx
-│   │   │   └── ConfirmDialog.jsx
-│   │   ├── services/
-│   │   │   ├── api.js
-│   │   │   ├── authService.js
-│   │   │   └── documentService.js
-│   │   ├── routes/
-│   │   │   └── AppRoutes.jsx
-│   │   ├── App.jsx
-│   │   └── main.jsx
-│   ├── package.json
-│   └── README.md
+│   └── src/
+│       ├── pages/
+│       ├── components/
+│       ├── services/
+│       └── routes/
 │
-├── Backend/                          # Núcleo do backend
-│   ├── __init__.py
+├── Backend/
 │   └── app/
-│       ├── __init__.py
-│       ├── api/                      # Camada HTTP
-│       │   ├── __init__.py
-│       │   ├── serializers/
-│       │   ├── views/
-│       │   │   ├── __init__.py
-│       │   │   ├── auth.py
-│       │   │   ├── categories.py
-│       │   │   ├── chat.py
-│       │   │   ├── documents.py
-│       │   │   └── users.py
-│       │   ├── factories.py
-│       │   ├── permissions.py
-│       │   └── urls.py
-│       │
+│       ├── api/                      # Views, serializers, URLs
 │       ├── application/              # Casos de uso
-│       │   ├── answer_question.py
-│       │   ├── create_document.py
-│       │   ├── delete_document.py
-│       │   ├── embedding_provider.py
-│       │   ├── index_document.py
-│       │   ├── list_documents.py
-│       │   ├── login_admin.py
-│       │   ├── update_document.py
-│       │   └── vector_store.py
-│       │
 │       ├── core/
-│       │   └── app_settings.py       # Configurações da aplicação
-│       │
 │       ├── domain/                   # Entidades e contratos
-│       │   ├── entities/
-│       │   └── repositories/
-│       │
-│       └── infrastructure/           # Implementações concretas
-│           ├── Database/
-│           ├── embeddings/
-│           ├── indexing/
-│           ├── llm/
-│           ├── repositories/
-│           ├── security/
-│           └── vectorstore/
+│       ├── infrastructure/           # Gemini, embeddings, vectorstore
+│       └── documents/                # Models e indexação de PDFs
+│           ├── models.py
+│           ├── apps.py
+│           └── management/commands/
+│               └── indexar_documentos.py
 │
 ├── config/                           # Configuração do Django
-│   ├── asgi.py
 │   ├── settings.py
 │   ├── urls.py
 │   └── wsgi.py
 │
-├── manage.py                         # Comando principal do Django
-├── docs/
-│   ├── arquitetura.md
-│   ├── backlog.md
-│   └── api.md
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   └── workflows/
-├── README.md
-└── .gitignore
+├── Documentos/                       # PDFs indexados no banco
+│   ├── portarias/
+│   ├── resolucoes/
+│   └── rod/
+│
+├── migrations/
+│   └── criar_indice_vetorial.sql     # Índice vetorial no PostgreSQL
+│
+├── docker-compose.yml                # PostgreSQL + pgvector via Docker
+├── Dockerfile                        # Imagem do backend
+├── init.sql                          # Habilita extensão pgvector
+├── .env.example                      # Modelo de variáveis de ambiente
+├── manage.py
+└── requirements.txt
 ```
-
----
-
-## O que cada parte faz
-
-### `frontend/`
-Interface do sistema acessada pelo usuário no navegador.
-
-- Telas de login
-- Listagem e cadastro de documentos
-- Páginas administrativas
-- Comunicação com o backend via API
-
-### `Backend/app/api/`
-Camada HTTP do backend.
-
-- Recebe requisições
-- Valida dados de entrada
-- Chama os casos de uso
-- Devolve respostas em JSON
-
-Arquivos importantes: `views/`, `serializers/`, `urls.py`, `permissions.py`, `factories.py`
-
-### `Backend/app/application/`
-Casos de uso do sistema — define **o que a aplicação faz**:
-
-- Criar, listar, atualizar e deletar documentos
-- Responder perguntas
-- Indexar conteúdo
-
-> Esta camada não depende diretamente da interface web.
-
-### `Backend/app/domain/`
-Camada central da regra de negócio. Contém entidades, contratos de repositório e os conceitos principais do sistema. É a parte mais "pura" da aplicação.
-
-### `Backend/app/infrastructure/`
-Implementações concretas dos contratos definidos em `domain/`:
-
-- Conexão com banco de dados
-- Autenticação e segurança
-- Integração com Gemini
-- Embeddings e vector store
-- Indexação
-
-### `Backend/app/core/app_settings.py`
-Centraliza as configurações da aplicação:
-
-- Chave da API do Gemini
-- Modelo de chat e de embeddings
-- Valor de `TOP_K`
-
-### `config/`
-Configuração do Django: `settings.py`, rotas globais em `urls.py`, e entradas para execução/deploy (`asgi.py`, `wsgi.py`).
-
-### `manage.py`
-Ponto de entrada do Django. Usado para rodar o servidor, aplicar migrações, criar superusuário e outros comandos administrativos.
 
 ---
 
 ## Tecnologias Utilizadas
 
 ### Frontend
-- React
-- JavaScript
-- Axios
-- React Router
+- React, JavaScript, Axios, React Router
 
 ### Backend
-- Python
-- Django
-- Django REST Framework
-- Simple JWT
-- django-cors-headers
+- Python, Django, Django REST Framework, Simple JWT, django-cors-headers
+
+### Banco de Dados
+- PostgreSQL 16 + pgvector (via Docker)
+- psycopg2-binary (driver Python)
 
 ### IA / RAG
-- Gemini API
-- Embeddings
-- Vector Store
-
----
-
-## Como o backend funciona
-
-A aplicação segue uma arquitetura em camadas:
-
-```
-Requisição HTTP
-      ↓
-   View (api/)
-      ↓
- Validação dos dados
-      ↓
- Caso de Uso (application/)
-      ↓
-Entidades + Repositórios + Integrações (domain/ + infrastructure/)
-      ↓
-   Resposta JSON
-```
-
-**Exemplo no chat:**
-
-1. O cliente envia uma pergunta via `POST /api/chat/`
-2. A view `chat.py` recebe e valida a entrada
-3. O caso de uso processa e monta o prompt
-4. A integração com Gemini gera a resposta
-5. A API retorna `{ "answer": "..." }`
+- Gemini API, Embeddings, Vector Store (pgvector)
 
 ---
 
 ## Requisitos
 
-- Python **3.10+**
-- Node.js **18+**
-- npm
-- Git
+- Python 3.10+
+- Node.js 18+
+- Docker Desktop
 - Chave de API do Gemini
 
 ---
@@ -253,7 +115,7 @@ Entidades + Repositórios + Integrações (domain/ + infrastructure/)
 ### 1. Clonar o repositório
 
 ```bash
-git clone <url-do-repositorio>
+git clone https://github.com/LES-Chatbot-KTP/Chatbot.git
 cd Chatbot
 ```
 
@@ -265,68 +127,73 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-**Windows CMD**
-```cmd
-python -m venv .venv
-.venv\Scripts\activate.bat
-```
-
 **Linux / macOS**
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 ```
 
-> Quando ativo, o terminal exibe `(.venv)` no início da linha.
-
 ### 3. Instalar dependências do backend
 
 ```bash
-pip install django djangorestframework djangorestframework-simplejwt django-cors-headers google-genai
-```
-
-Para salvar as dependências:
-
-```bash
-pip freeze > requirements.txt
+pip install django djangorestframework djangorestframework-simplejwt django-cors-headers google-genai psycopg2-binary pypdf python-dotenv
 ```
 
 ### 4. Configurar variáveis de ambiente
 
-Crie um arquivo `.env` na raiz do projeto:
-
-```env
-GEMINI_API_KEY=sua_chave_aqui
-CHAT_MODEL=seu_modelo_gemini
-EMBEDDING_MODEL=seu_modelo_de_embedding
-TOP_K=5
+```bash
+cp .env.example .env
+# Edite o .env e preencha GEMINI_API_KEY, POSTGRES_PASSWORD e SECRET_KEY
 ```
 
-### 5. Aplicar migrações
+### 5. Subir o banco de dados
+
+> O Docker Desktop precisa estar aberto antes desse passo.
 
 ```bash
+docker-compose up -d db
+```
+
+### 6. Aplicar migrações
+
+```bash
+python manage.py makemigrations documents
 python manage.py migrate
 ```
 
-### 6. Criar superusuário
+### 7. Criar o índice vetorial no PostgreSQL
+
+**Windows PowerShell:**
+```powershell
+Get-Content migrations/criar_indice_vetorial.sql | docker exec -i chatbot_db psql -U chatbot_user -d chatbot
+```
+
+**Linux / macOS:**
+```bash
+docker exec -i chatbot_db psql -U chatbot_user -d chatbot < migrations/criar_indice_vetorial.sql
+```
+
+### 8. Indexar os documentos PDF
+
+```bash
+python manage.py indexar_documentos
+```
+
+Resultado esperado:
+```
+✅ Indexação concluída: 42 documento(s), 650 chunk(s)
+```
+
+### 9. Criar superusuário e iniciar o servidor
 
 ```bash
 python manage.py createsuperuser
-```
-
-> Usado para acessar `/admin/` e testar geração de tokens JWT.
-
-### 7. Iniciar o servidor backend
-
-```bash
 python manage.py runserver
 ```
 
 O backend ficará disponível em **http://127.0.0.1:8000/**
 
-Para encerrar: `Ctrl + C`
-
-### 8. Rodar o frontend
+### 10. Rodar o frontend
 
 Em outro terminal:
 
@@ -340,20 +207,64 @@ O frontend ficará disponível em **http://localhost:5173/**
 
 ---
 
+## Configuração do PostgreSQL + Docker
+
+O projeto usa **PostgreSQL 16 com a extensão pgvector** para armazenar os documentos e seus embeddings vetoriais.
+
+### Estrutura do banco
+
+| Tabela | Descrição |
+|---|---|
+| `documents_documento` | Armazena os 42 PDFs (portarias, resoluções, RODs) |
+| `documents_chunkdocumento` | Armazena os chunks de texto e embeddings vetoriais |
+
+### Verificar se o banco está rodando
+
+```bash
+docker-compose ps
+# chatbot_db   Up (healthy)   0.0.0.0:5432->5432/tcp
+```
+
+### Consultar dados no banco
+
+```bash
+docker exec -it chatbot_db psql -U chatbot_user -d chatbot
+```
+
+```sql
+-- Documentos por tipo
+SELECT tipo, COUNT(*) FROM documents_documento GROUP BY tipo;
+
+-- Total de chunks
+SELECT COUNT(*) FROM documents_chunkdocumento;
+```
+
+---
+
 ## Variáveis de Ambiente
+
+Crie um arquivo `.env` na raiz baseado no `.env.example`:
 
 | Variável | Descrição |
 |---|---|
 | `GEMINI_API_KEY` | Chave de acesso à API do Gemini |
-| `CHAT_MODEL` | Modelo usado para gerar respostas |
-| `EMBEDDING_MODEL` | Modelo usado para gerar embeddings |
-| `TOP_K` | Quantidade de documentos recuperados na busca vetorial |
+| `CHAT_MODEL` | Modelo para gerar respostas (ex: gemini-1.5-flash) |
+| `EMBEDDING_MODEL` | Modelo para embeddings (ex: models/text-embedding-004) |
+| `TOP_K` | Quantidade de chunks recuperados na busca vetorial |
+| `POSTGRES_DB` | Nome do banco de dados |
+| `POSTGRES_USER` | Usuário do banco |
+| `POSTGRES_PASSWORD` | Senha do banco |
+| `DB_HOST` | Host do banco (localhost em dev, db no Docker) |
+| `SECRET_KEY` | Chave secreta do Django |
+| `DEBUG` | True em desenvolvimento, False em produção |
+
+> ⚠️ Nunca suba o `.env` para o GitHub. Apenas o `.env.example`.
 
 ---
 
 ## Configuração do Django
 
-Em `config/settings.py`, certifique-se de que as apps e configurações abaixo estão presentes:
+Em `config/settings.py`:
 
 ```python
 INSTALLED_APPS = [
@@ -361,6 +272,8 @@ INSTALLED_APPS = [
     "corsheaders",
     "rest_framework",
     "rest_framework_simplejwt",
+    "Backend.app",
+    "Backend.app.documents",
 ]
 
 REST_FRAMEWORK = {
@@ -380,62 +293,40 @@ CORS_ALLOWED_ORIGINS = [
 ## Rotas da API
 
 ### `POST /api/token/`
-Gera um par de tokens JWT (acesso e refresh).
+Gera tokens JWT de acesso e refresh.
 
-**Request:**
 ```json
-{
-  "username": "seu_usuario",
-  "password": "sua_senha"
-}
-```
+// Request
+{ "username": "seu_usuario", "password": "sua_senha" }
 
-**Response:**
-```json
-{
-  "refresh": "...",
-  "access": "..."
-}
+// Response
+{ "refresh": "...", "access": "..." }
 ```
-
----
 
 ### `POST /api/token/refresh/`
-Renova o token de acesso usando o token de refresh.
+Renova o token de acesso.
 
-**Request:**
 ```json
-{
-  "refresh": "seu_refresh_token"
-}
+{ "refresh": "seu_refresh_token" }
 ```
-
----
 
 ### `POST /api/chat/`
 Recebe uma pergunta e retorna a resposta do chatbot.
 
-**Request:**
 ```json
-{
-  "question": "O que é RAG?"
-}
-```
+// Request
+{ "question": "O que é RAG?" }
 
-**Response:**
-```json
-{
-  "answer": "RAG é uma abordagem que recupera contexto antes de gerar a resposta."
-}
+// Response
+{ "answer": "RAG é uma abordagem que recupera contexto antes de gerar a resposta." }
 ```
 
 ---
 
 ## Autenticação JWT
 
-1. O usuário realiza login via `POST /api/token/`
-2. A API retorna os tokens `access` e `refresh`
-3. O token `access` é enviado no header das rotas protegidas:
+1. Login via `POST /api/token/`
+2. Usar o token `access` no header das rotas protegidas:
 
 ```http
 Authorization: Bearer SEU_TOKEN
@@ -445,23 +336,6 @@ Authorization: Bearer SEU_TOKEN
 
 ## Testando com Postman
 
-### Gerar token JWT
-
-| Campo | Valor |
-|---|---|
-| Método | `POST` |
-| URL | `http://127.0.0.1:8000/api/token/` |
-| Body | `raw → JSON` |
-
-```json
-{
-  "username": "seu_usuario",
-  "password": "sua_senha"
-}
-```
-
-### Testar o chat
-
 | Campo | Valor |
 |---|---|
 | Método | `POST` |
@@ -470,23 +344,19 @@ Authorization: Bearer SEU_TOKEN
 | Body | `raw → JSON` |
 
 ```json
-{
-  "question": "oi"
-}
+{ "question": "oi" }
 ```
 
 ---
 
 ## Arquitetura RAG
 
-O projeto está preparado para **RAG (Retrieval-Augmented Generation)**:
-
 ```
 Pergunta do usuário
         ↓
-  Geração de embedding
+  Geração de embedding (Gemini)
         ↓
-  Busca vetorial (TOP_K documentos)
+  Busca vetorial no PostgreSQL (TOP_K chunks)
         ↓
   Contexto + Pergunta → Prompt
         ↓
@@ -503,87 +373,82 @@ Backend/app/
 │   ├── embedding_provider.py
 │   ├── vector_store.py
 │   └── index_document.py
-└── infrastructure/
-    ├── embeddings/
-    └── vectorstore/
+├── infrastructure/
+│   ├── embeddings/
+│   ├── vectorstore/
+│   └── llm/
+└── documents/
+    └── management/commands/
+        └── indexar_documentos.py
 ```
-
-A integração com o Gemini fica **desacoplada da view**, dentro de `infrastructure/llm/`, o que facilita trocar de provedor, testar e manter o código organizado.
 
 ---
 
 ## Erros Comuns
 
-### `ECONNREFUSED`
-O servidor Django não está rodando.
+### `open //./pipe/dockerDesktopLinuxEngine`
+O Docker Desktop não está aberto. Abra-o e aguarde inicializar.
+
+### `No module named 'psycopg2'`
 ```bash
-python manage.py runserver
+pip install psycopg2-binary
 ```
 
-### `404 Page not found`
-A rota não foi registrada. Verifique:
-- `config/urls.py`
-- `Backend/app/api/urls.py`
-
-### `No module named 'app'`
-Problema de import por causa da estrutura de pastas. Certifique-se de que os arquivos `__init__.py` existem em:
-
-```
-Backend/
-Backend/app/
-Backend/app/api/
-Backend/app/api/views/
+### `No module named 'dotenv'`
+```bash
+pip install python-dotenv
 ```
 
-### `"O campo 'question' é obrigatório."`
-O body não foi enviado corretamente. No Postman: **Body → raw → JSON**
+### `No installed app with label 'documents'`
+Certifique-se de que `"Backend.app.documents"` está em `INSTALLED_APPS` e que o arquivo `apps.py` existe em `Backend/app/documents/`.
 
-```json
-{
-  "question": "oi"
-}
+### `Operador '<' reservado` (PowerShell)
+Use `Get-Content` no lugar de `<`:
+```powershell
+Get-Content arquivo.sql | docker exec -i chatbot_db psql -U chatbot_user -d chatbot
 ```
+
+### `404 Not Found` nas rotas
+Verifique `config/urls.py` e `Backend/app/api/urls.py`.
 
 ---
 
 ## Próximos Passos
 
-- [ ] Integrar a rota `/api/chat/` com o Gemini
-- [ ] Ligar o fluxo completo de RAG
+- [ ] Gerar embeddings via Gemini e popular a coluna `embedding_vector`
+- [ ] Implementar o fluxo RAG completo na rota `/api/chat/`
 - [ ] Proteger rotas administrativas com JWT
 - [ ] Conectar o frontend ao login e ao chat
 - [ ] Adicionar testes automatizados
+- [ ] Dashboard de métricas e relatórios
 
 ---
 
 ## ⚡ Resumo Rápido
 
-### Backend
 ```bash
-python -m venv .venv
-.venv\Scripts\Activate.ps1       # Windows
-# source .venv/bin/activate      # Linux/macOS
-pip install django djangorestframework djangorestframework-simplejwt django-cors-headers google-genai
+# 1. Ambiente
+python -m venv .venv && .venv\Scripts\Activate.ps1
+pip install django djangorestframework djangorestframework-simplejwt django-cors-headers google-genai psycopg2-binary pypdf python-dotenv
+
+# 2. Banco (Docker Desktop aberto)
+cp .env.example .env
+docker-compose up -d db
+
+# 3. Migrações e índice vetorial
+python manage.py makemigrations documents
 python manage.py migrate
+Get-Content migrations/criar_indice_vetorial.sql | docker exec -i chatbot_db psql -U chatbot_user -d chatbot
+
+# 4. Indexar PDFs
+python manage.py indexar_documentos
+
+# 5. Servidor
 python manage.py createsuperuser
 python manage.py runserver
+
+# 6. Frontend (outro terminal)
+cd frontend && npm install && npm run dev
 ```
 
-### Frontend
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-### Teste rápido
-```http
-POST http://127.0.0.1:8000/api/chat/
-Content-Type: application/json
-
-{ "question": "oi" }
-```
-
----
-
-> **Observações:** O backend foi migrado de FastAPI para Django REST Framework. O Django está na raiz através de `manage.py` e `config/`. O código principal da aplicação está em `Backend/app/`. A API do Gemini deve ser configurada via variável de ambiente.
+> **Observações:** O banco SQLite foi substituído por PostgreSQL via Docker. Os 42 documentos PDF estão indexados em 650 chunks. O Django está na raiz via `manage.py` e `config/`. A API do Gemini deve ser configurada via variável de ambiente.
