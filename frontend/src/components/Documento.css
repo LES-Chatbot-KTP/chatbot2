@@ -9,6 +9,7 @@
 
 .documento:hover {
   background-color: #2c3038;
+  cursor: pointer;
 }
 
 .docIcon img {

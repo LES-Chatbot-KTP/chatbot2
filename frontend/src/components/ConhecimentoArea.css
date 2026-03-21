@@ -1,11 +1,10 @@
 .conhecArea {
   flex: 1;
-  height: 100vh;
+  min-height: 100vh;
   background-color: #393e46;
   color: white;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
 .topo {
@@ -13,11 +12,13 @@
   justify-content: space-between;
   align-items: center;
   background-color: #222831;
+  padding: 20px 40px;
+  flex-wrap: wrap;
 }
 
 .topo h2 {
-  margin-left: 60px;
-  font-size: 40px;
+  font-size: 32px;
+  margin: 0;
 }
 
 .btnAdd {
@@ -27,9 +28,8 @@
   border-radius: 22px;
   cursor: pointer;
   font-weight: bold;
-  margin-right: 60px;
-  font-size: 30px;
-  padding: 10px;
+  font-size: 18px;
+  padding: 10px 20px;
 }
 
 .btnAdd:hover {
@@ -39,54 +39,78 @@
 
 .dadosDoc {
   display: flex;
-  flex-direction: row;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 20px;
-  padding-top: 30px;
-
-  height: 20vh;
+  padding: 20px;
 }
 
 .cardDados {
-  height: 15vh;
-  width: 325px;
+  flex: 1 1 220px;
+  max-width: 300px;
   background-color: #222831;
   border-radius: 22px;
-
+  padding: 15px;
   display: flex;
   flex-direction: column;
-  justify-content: space-around;
-  padding-left: 20px;
-
-  color: #eeeeee;
+  gap: 10px;
 }
 
 .areaDocumentos {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 0 60px 0 60px;
+  padding: 0 20px 20px;
+  min-height: 0;
 }
 
 .listaDocumentos {
   flex: 1;
-  overflow-y: auto;
-  border-top-right-radius: 22px;
-  border-top-left-radius: 22px;
+  display: flex;
+  flex-direction: column;
   background-color: #222831;
+  border-radius: 22px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .headerDoc {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 15px 20px;
   border-bottom: 1px solid #393e46;
-  padding: 0 20px 0 20px;
+  background-color: #222831;
+  z-index: 1;
 }
 
 .headerDoc h2 {
-  font-size: 22px;
+  margin: 0;
+  font-size: 18px;
+}
+
+.listaScroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.listaScroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.listaScroll::-webkit-scrollbar-thumb {
+  background-color: #eeeeee;
+  border-radius: 10px;
+}
+
+.listaScroll::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.listaScroll {
+  scrollbar-width: thin;
+  scrollbar-color: #eeeeee transparent;
 }
 
 .btnReindexar {
@@ -96,23 +120,25 @@
   cursor: pointer;
   color: #eeeeee;
   font-weight: bold;
-  font-size: 24px;
-  padding: 10px;
+  font-size: 14px;
+  padding: 8px 15px;
 
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .btnReindexar img {
-  filter: invert(1);
+  width: 18px;
+  height: 18px;
+  filter: invert();
 }
 
 .btnReindexar:hover {
   background-color: #eeeeee;
   color: #222831;
 }
+
 .btnReindexar:hover img {
   filter: invert(0);
 }
@@ -132,36 +158,46 @@
   justify-content: center;
   align-items: center;
 
-  z-index: 999;
+  z-index: 9999;
 }
 
-/* CAIXA DO MODAL */
 .modal {
   width: 500px;
-  max-width: 90%;
+  max-width: 95%;
   background-color: #222831;
   border-radius: 16px;
-  padding: 25px;
+  padding: 20px;
 
   display: flex;
   flex-direction: column;
   gap: 15px;
 
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  color: #eeeeee;
+
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 /* TÍTULO */
 .modal h2 {
-  margin: 0;
   text-align: center;
+  margin: 0;
 }
 
 /* INPUTS */
 .modal label {
   display: flex;
   flex-direction: column;
-  font-size: 14px;
   gap: 5px;
 }
 
@@ -170,32 +206,23 @@
   padding: 10px;
   border-radius: 8px;
   border: none;
-  outline: none;
-
-  /*  
-  background-color: #eeeeee;
-  color: #393e46;
-  */
-
   background-color: #393e46;
   color: white;
 }
 
 .modal textarea {
   min-height: 100px;
-  resize: none;
 }
 
-/* BOTÕES */
+/* BOTÕES MODAL */
 .modalActions {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
-  margin-top: 10px;
 }
 
 .btnVoltar {
-  background-color: transparent;
+  background: transparent;
   border: 1px solid #eeeeee;
   color: #eeeeee;
   padding: 8px 15px;
@@ -219,4 +246,15 @@
 
 .btnSalvar:hover {
   background-color: #009da5;
+}
+
+@media (max-width: 768px) {
+  .topo {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btnAdd {
+    width: 100%;
+  }
 }

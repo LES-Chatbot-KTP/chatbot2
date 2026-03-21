@@ -45,28 +45,35 @@ export default function ConhecimentoArea() {
             </button>
           </div>
 
-          {/*  */}
-          <Documento
-            titulo="Banco de dados"
-            conteudo="teste teste teste"
-            categoria="TI"
-            dataCriacao="10/01/2026"
-            ultimaAtualizacao="22/03/2026 10:00"
-            status="pendente"
-          />
-          <Documento
-            titulo="Banco de dados"
-            conteudo="teste teste teste"
-            categoria="TI"
-            dataCriacao="10/01/2026"
-            ultimaAtualizacao="22/03/2026 10:00"
-            status="indexado"
-          />
-          {/*  */}
+          <div className="listaScroll">
+            <Documento
+              titulo="Banco de dados"
+              categoria="TI"
+              dataCriacao="10/01/2026"
+              ultimaAtualizacao="22/03/2026 10:00"
+              status="pendente"
+            />
+
+            <Documento
+              titulo="Machine Learning"
+              categoria="IA"
+              dataCriacao="05/02/2026"
+              ultimaAtualizacao="22/03/2026 11:30"
+              status="indexado"
+            />
+
+            <Documento
+              titulo="React Hooks"
+              categoria="Front-end"
+              dataCriacao="15/02/2026"
+              ultimaAtualizacao="22/03/2026 12:10"
+              status="indexado"
+            />
+          </div>
         </div>
       </div>
 
-      {/* Modal */}
+      {/* MODAL */}
       {modalOpen && (
         <div className="overlay">
           <div className="modal">
@@ -84,7 +91,7 @@ export default function ConhecimentoArea() {
 
             <label>
               Conteúdo
-              <textarea placeholder="Digite o conteúdo..." />
+              <input type="text" placeholder="Digite o conteúdo..." />
             </label>
 
             <label>
