@@ -36,6 +36,14 @@ class DocumentRepository(ABC):
         """Retorna todos os documentos indexados."""
         pass
 
+    @abstractmethod
+    def save(self, nome: str, tipo: str, caminho_arquivo: str) -> dict:
+        """
+        Persiste um novo documento no repositório.
+        Retorna um dict com os dados do documento criado.
+        """
+        pass
+
 
 # ─── Implementação SQLite (mantida) ───────────────────────────────────────────
 

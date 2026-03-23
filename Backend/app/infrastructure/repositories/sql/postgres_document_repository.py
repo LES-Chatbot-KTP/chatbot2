@@ -34,3 +34,17 @@ class PostgresDocumentRepository(DocumentRepository):
                 "id", "nome", "tipo", "caminho_arquivo", "indexado_em"
             )
         )
+
+    def save(self, nome: str, tipo: str, caminho_arquivo: str) -> dict:
+        doc = Documento.objects.create(
+            nome=nome,
+            tipo=tipo,
+            caminho_arquivo=caminho_arquivo,
+        )
+        return {
+            "id": doc.id,
+            "nome": doc.nome,
+            "tipo": doc.tipo,
+            "caminho_arquivo": doc.caminho_arquivo,
+            "indexado_em": doc.indexado_em.isoformat(),
+        }
