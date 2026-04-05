@@ -5,9 +5,9 @@ from rest_framework import status
 from Backend.app.application.answer_question import (
     iniciar_conversa,
     registrar_mensagem,
-    gerar_resposta,
     registrar_resposta,
 )
+from Backend.app.api.factories import ChatFactory
 from Backend.app.documents.models import Conversa, Mensagem
 
 
@@ -67,16 +67,22 @@ class ChatPerguntaView(APIView):
         # Registra pergunta original (#36) e processada (#37)
         mensagem = registrar_mensagem(conversa, question)
 
-        # Gera e registra resposta
-        resposta = gerar_resposta(mensagem.conteudo_processado)
-        registrar_resposta(conversa, resposta)
+        # Gera e registra resposta via pipeline RAG
+        responder = ChatFactory.make_responder()
+        resultado = responder.executar(mensagem.conteudo_processado)
+        registrar_resposta(
+            conversa,
+            resultado["resposta"],
+            ids_fontes=[f["id"] for f in resultado["fontes"]],
+        )
 
         return Response(
             {
                 "conversa_id":          conversa.id,
                 "pergunta_original":    mensagem.conteudo_original,
                 "pergunta_processada":  mensagem.conteudo_processado,
-                "answer":               resposta,
+                "answer":               resultado["resposta"],
+                "fontes":               resultado["fontes"],
             },
             status=status.HTTP_200_OK,
         )
@@ -97,7 +103,7 @@ class ChatHistoricoView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        mensagens = conversa.mensagens.all()
+        mensagens = conversa.mensagens.prefetch_related("fontes").all()
         data = [
             {
                 "id":                   m.id,
@@ -105,6 +111,10 @@ class ChatHistoricoView(APIView):
                 "conteudo_original":    m.conteudo_original,
                 "conteudo_processado":  m.conteudo_processado,
                 "criada_em":            m.criada_em,
+                "fontes": [
+                    {"id": d.id, "nome": d.nome}
+                    for d in m.fontes.all()
+                ],
             }
             for m in mensagens
         ]

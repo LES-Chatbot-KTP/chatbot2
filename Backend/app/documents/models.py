@@ -125,6 +125,11 @@ class Mensagem(models.Model):
     role                 = models.CharField(max_length=20, choices=ROLES)
     conteudo_original    = models.TextField()           # pergunta como o usuário digitou (#36)
     conteudo_processado  = models.TextField(blank=True) # pergunta após pré-processamento (#37)
+    fontes               = models.ManyToManyField(      # documentos usados na resposta RAG
+                               Documento,
+                               blank=True,
+                               related_name="mensagens_origem",
+                           )
     criada_em            = models.DateTimeField(auto_now_add=True)
 
     class Meta:
