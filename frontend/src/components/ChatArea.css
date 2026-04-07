@@ -9,14 +9,113 @@
 
 .mensagens {
   flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+}
+
+/* Estado inicial sem mensagens */
+.placeholder {
   display: flex;
   justify-content: center;
   align-items: center;
+  flex: 1;
 }
 
 .placeholder h2 {
   font-weight: 500;
   opacity: 0.7;
+}
+
+/* Lista de mensagens */
+.listaMensagens {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+/* Bolha genérica */
+.bolha {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+/* Bolha do usuário — alinhada à direita */
+.bolha-user {
+  align-self: flex-end;
+  background-color: #00adb5;
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+/* Bolha do bot — alinhada à esquerda */
+.bolha-bot {
+  align-self: flex-start;
+  background-color: #4a505a;
+  color: #f0f0f0;
+  border-bottom-left-radius: 4px;
+}
+
+/* Bolha de erro */
+.bolha-erro {
+  background-color: #7b3030;
+  color: #ffd0d0;
+}
+
+.bolha-texto {
+  margin: 0;
+}
+
+/* Origem da informação */
+.bolha-origem {
+  display: block;
+  margin-top: 6px;
+  font-size: 11px;
+  opacity: 0.55;
+  font-style: italic;
+}
+
+/* Indicador de digitação */
+.bolha-carregando {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 14px 18px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #aaa;
+  animation: piscar 1.2s infinite ease-in-out;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes piscar {
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.9);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 }
 
 .partedebaixo {
@@ -28,7 +127,7 @@
 .mensagemArea {
   width: 100%;
   max-width: 800px;
-  background-color: #eeeeee;
+  background-color: #4a505a;
   border-radius: 22px;
   display: flex;
   align-items: center;
@@ -44,6 +143,10 @@
   font-size: 16px;
 }
 
+.mensagemArea input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
 .botaoEnviar {
   background: none;
   border: none;
@@ -57,7 +160,12 @@
   height: 28px;
 }
 
-.botaoEnviar:hover {
+.botaoEnviar:hover:not(:disabled) {
   background-color: #393e46;
   border-radius: 50%;
+}
+
+.botaoEnviar:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
