@@ -19,12 +19,6 @@ _PROMPT_TEMPLATE = (
 
 
 def preprocessar_pergunta(texto: str) -> str:
-    """
-    Pré-processa a pergunta do usuário:
-    - Remove espaços extras
-    - Converte para minúsculas
-    - Remove caracteres especiais desnecessários
-    """
     texto = texto.strip()
     texto = re.sub(r'\s+', ' ', texto)
     texto = texto.lower()
@@ -99,17 +93,13 @@ def iniciar_conversa(user=None) -> Conversa:
 
 
 def registrar_mensagem(conversa: Conversa, pergunta_original: str) -> Mensagem:
-    """
-    Registra a pergunta original (#36) e a processada (#37).
-    Retorna a mensagem criada.
-    """
+    """Registra a pergunta original (#36) e a processada (#37)."""
     pergunta_processada = preprocessar_pergunta(pergunta_original)
-
     mensagem = Mensagem.objects.create(
         conversa=conversa,
         role="user",
-        conteudo_original=pergunta_original,       # #36 — pergunta como veio do usuário
-        conteudo_processado=pergunta_processada,   # #37 — pergunta após processamento
+        conteudo_original=pergunta_original,
+        conteudo_processado=pergunta_processada,
     )
     return mensagem
 
