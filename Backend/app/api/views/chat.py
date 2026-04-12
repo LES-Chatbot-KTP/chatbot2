@@ -65,7 +65,7 @@ class ChatPerguntaView(APIView):
         mensagem = registrar_mensagem(conversa, question)
 
         # Gera e registra resposta
-        resposta = gerar_resposta(mensagem.conteudo_processado)
+        resposta, respondida = gerar_resposta(mensagem.conteudo_processado)
         registrar_resposta(conversa, resposta)
 
         return Response(
@@ -74,6 +74,7 @@ class ChatPerguntaView(APIView):
                 "pergunta_original":    mensagem.conteudo_original,
                 "pergunta_processada":  mensagem.conteudo_processado,
                 "answer":               resposta,
+                "respondida":           respondida,
             },
             status=status.HTTP_200_OK,
         )
