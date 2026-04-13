@@ -54,8 +54,8 @@ class ChatPerguntaView(APIView):
 
         mensagem = registrar_mensagem(conversa, question)
 
-        # Nosso código blindado que retorna a resposta e a intenção!
-        resposta, intencao = gerar_resposta(mensagem.conteudo_processado)
+        # Integração: Resposta, Intenção e a nova flag 'respondida'
+        resposta, intencao, respondida = gerar_resposta(mensagem.conteudo_processado)
         
         registrar_resposta(conversa, resposta)
 
@@ -66,31 +66,7 @@ class ChatPerguntaView(APIView):
                 "pergunta_processada": mensagem.conteudo_processado,
                 "intencao":            intencao,
                 "answer":              resposta,
+                "respondida":          respondida,
             },
             status=status.HTTP_200_OK,
         )
-
-
-class ChatHistoricoView(APIView):
-
-    def get(self, request, conversa_id: int):
-        try:
-            conversa = Conversa.objects.get(id=conversa_id)
-        except Conversa.DoesNotExist:
-            return Response(
-                {"error": "Conversa não encontrada."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
-        mensagens = conversa.mensagens.all()
-        data = [
-            {
-                "id":                  m.id,
-                "role":                m.role,
-                "conteudo_original":   m.conteudo_original,
-                "conteudo_processado": m.conteudo_processado,
-                "criada_em":           m.criada_em,
-            }
-            for m in mensagens
-        ]
-        return Response({"conversa_id": conversa_id, "mensagens": data})
