@@ -6,13 +6,17 @@ from rest_framework.permissions import AllowAny
 from Backend.app.application.answer_question import (
     iniciar_conversa,
     registrar_mensagem,
-    gerar_resposta,
     registrar_resposta,
 )
+from Backend.app.api.factories import ChatFactory
 from Backend.app.documents.models import Conversa, Mensagem
 
 
 class ChatIniciarView(APIView):
+    """
+    POST /api/chat/iniciar/
+    Cria uma nova conversa e retorna o id da sessão. #34
+    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -28,6 +32,10 @@ class ChatIniciarView(APIView):
 
 
 class ChatPerguntaView(APIView):
+    """
+    POST /api/chat/pergunta/
+    Recebe uma pergunta, registra original e processada, retorna resposta. #35 #36 #37
+    """
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -40,6 +48,7 @@ class ChatPerguntaView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # Busca conversa existente ou cria uma nova
         if conversa_id:
             try:
                 conversa = Conversa.objects.get(id=conversa_id)
@@ -52,27 +61,38 @@ class ChatPerguntaView(APIView):
             user = request.user if request.user.is_authenticated else None
             conversa = iniciar_conversa(user=user)
 
+        # Registra pergunta original (#36) e processada (#37)
         mensagem = registrar_mensagem(conversa, question)
 
-        # Integração: Resposta, Intenção e a nova flag 'respondida'
-        resposta, intencao, respondida = gerar_resposta(mensagem.conteudo_processado)
-        
-        registrar_resposta(conversa, resposta)
+        # Gera e registra resposta via pipeline RAG
+        responder = ChatFactory.make_responder()
+        resultado = responder.executar(mensagem.conteudo_processado)
+        registrar_resposta(
+            conversa,
+            resultado["resposta"],
+            ids_fontes=[f["id"] for f in resultado["fontes"]],
+        )
 
         return Response(
             {
-                "conversa_id":         conversa.id,
-                "pergunta_original":   mensagem.conteudo_original,
-                "pergunta_processada": mensagem.conteudo_processado,
-                "intencao":            intencao,
-                "answer":              resposta,
-                "respondida":          respondida,
+                "conversa_id":          conversa.id,
+                "pergunta_original":    mensagem.conteudo_original,
+                "pergunta_processada":  mensagem.conteudo_processado,
+                "answer":               resultado["resposta"],
+                "fontes":               resultado["fontes"],
+                "citacoes":             resultado["citacoes"],
+                "respondida":           resultado["respondida"],
+                "intencao":             resultado["intencao"],
             },
             status=status.HTTP_200_OK,
         )
 
 
 class ChatHistoricoView(APIView):
+    """
+    GET /api/chat/<conversa_id>/historico/
+    Retorna o histórico completo de uma conversa.
+    """
 
     def get(self, request, conversa_id: int):
         try:
@@ -83,14 +103,18 @@ class ChatHistoricoView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        mensagens = conversa.mensagens.all()
+        mensagens = conversa.mensagens.prefetch_related("fontes").all()
         data = [
             {
-                "id":                  m.id,
-                "role":                m.role,
-                "conteudo_original":   m.conteudo_original,
-                "conteudo_processado": m.conteudo_processado,
-                "criada_em":           m.criada_em,
+                "id":                   m.id,
+                "role":                 m.role,
+                "conteudo_original":    m.conteudo_original,
+                "conteudo_processado":  m.conteudo_processado,
+                "criada_em":            m.criada_em,
+                "fontes": [
+                    {"id": d.id, "nome": d.nome}
+                    for d in m.fontes.all()
+                ],
             }
             for m in mensagens
         ]

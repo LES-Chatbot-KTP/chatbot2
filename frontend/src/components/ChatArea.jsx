@@ -1,25 +1,32 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./ChatArea.css";
 import enviarIcon from "../assets/images/enviar.svg";
-import api from "../services/api";
+import api from "../services/api.jsx";
 
 export default function ChatArea() {
   const [mensagens, setMensagens] = useState([]);
   const [input, setInput] = useState("");
-  const [conversaId, setConversaId] = useState(null);
   const [carregando, setCarregando] = useState(false);
+  const [conversaId, setConversaId] = useState(null);
   const fimRef = useRef(null);
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [mensagens]);
+    api
+      .post("/api/chat/iniciar/")
+      .then((res) => setConversaId(res.data.conversa_id))
+      .catch((err) => console.error("Erro ao iniciar conversa:", err));
+  }, []);
 
-  async function handleEnviar() {
+  useEffect(() => {
+    fimRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [mensagens, carregando]);
+
+  async function enviar() {
     const texto = input.trim();
     if (!texto || carregando) return;
 
     setInput("");
-    setMensagens((prev) => [...prev, { role: "user", texto }]);
+    setMensagens((prev) => [...prev, { role: "user", conteudo: texto }]);
     setCarregando(true);
 
     try {
@@ -27,14 +34,13 @@ export default function ChatArea() {
         conversa_id: conversaId,
         question: texto,
       });
-
-      if (!conversaId) setConversaId(res.data.conversa_id);
-
       setMensagens((prev) => [
         ...prev,
         {
-          role: "assistant",
-          texto: res.data.answer,
+          role:       "assistant",
+          conteudo:   res.data.answer,
+          fontes:     res.data.fontes    ?? [],
+          citacoes:   res.data.citacoes  ?? [],
           respondida: res.data.respondida,
         },
       ]);
@@ -42,8 +48,10 @@ export default function ChatArea() {
       setMensagens((prev) => [
         ...prev,
         {
-          role: "assistant",
-          texto: "Não foi possível conectar ao servidor. Tente novamente.",
+          role:       "assistant",
+          conteudo:   "Não foi possível conectar ao servidor. Tente novamente.",
+          fontes:     [],
+          citacoes:   [],
           respondida: false,
         },
       ]);
@@ -55,47 +63,58 @@ export default function ChatArea() {
   function handleKeyDown(e) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleEnviar();
+      enviar();
     }
   }
 
   return (
     <div className="chatArea">
       <div className="mensagens">
-        {mensagens.length === 0 && (
+        {mensagens.length === 0 ? (
           <div className="placeholder">
             <h2>Como posso ajudar?</h2>
           </div>
-        )}
+        ) : (
+          <div className="listaMensagens">
+            {mensagens.map((msg, i) => {
+              const semResposta =
+                msg.role === "assistant" && msg.respondida === false;
+              return (
+                <div
+                  key={i}
+                  className={`bolha ${msg.role}${semResposta ? " sem-resposta" : ""}`}
+                >
+                  {semResposta && (
+                    <div className="sem-resposta-header">
+                      <span className="sem-resposta-icone">&#9888;</span>
+                      <span className="sem-resposta-titulo">
+                        Não foi possível responder
+                      </span>
+                    </div>
+                  )}
 
-        {mensagens.map((m, i) => {
-          const semResposta = m.role === "assistant" && m.respondida === false;
-          return (
-            <div
-              key={i}
-              className={`mensagem ${m.role}${semResposta ? " sem-resposta" : ""}`}
-            >
-              {semResposta && (
-                <div className="sem-resposta-header">
-                  {" "}
-                  <span className="sem-resposta-icone">&#9888;</span>{" "}
-                  <span className="sem-resposta-titulo">
-                    Não foi possível responder
-                  </span>{" "}
+                  <div className="textoBolha">{msg.conteudo}</div>
+
+                  {msg.citacoes && msg.citacoes.length > 0 && (
+                    <CitacoesArea citacoes={msg.citacoes} />
+                  )}
                 </div>
-              )}
-              <span>{m.texto}</span>
-            </div>
-          );
-        })}
+              );
+            })}
 
-        {carregando && (
-          <div className="mensagem assistant">
-            <span>...</span>
+            {carregando && (
+              <div className="bolha assistant">
+                <div className="digitando">
+                  <span />
+                  <span />
+                  <span />
+                </div>
+              </div>
+            )}
+
+            <div ref={fimRef} />
           </div>
         )}
-
-        <div ref={fimRef} />
       </div>
 
       <div className="partedebaixo">
@@ -110,13 +129,48 @@ export default function ChatArea() {
           />
           <button
             className="botaoEnviar"
-            onClick={handleEnviar}
-            disabled={carregando}
+            onClick={enviar}
+            disabled={carregando || !input.trim()}
           >
             <img src={enviarIcon} alt="Enviar" />
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+function CitacoesArea({ citacoes }) {
+  const [aberto, setAberto] = useState(false);
+
+  return (
+    <div className="citacoesArea">
+      <button
+        className="citacoesToggle"
+        onClick={() => setAberto((v) => !v)}
+        aria-expanded={aberto}
+      >
+        <span className="citacoesIcone">&#128196;</span>
+        <span>{citacoes.length} fonte{citacoes.length !== 1 ? "s" : ""} consultada{citacoes.length !== 1 ? "s" : ""}</span>
+        <span className="citacoesChevron">{aberto ? "▲" : "▼"}</span>
+      </button>
+
+      {aberto && (
+        <ul className="citacoesList">
+          {citacoes.map((c) => (
+            <li key={c.ordem} className="citacaoCard">
+              <div className="citacaoHeader">
+                <span className="citacaoOrdem">{c.ordem}</span>
+                <span className="citacaoDoc">{c.documento_nome}</span>
+                {c.numero_pagina && (
+                  <span className="citacaoPagina">pág.&nbsp;{c.numero_pagina}</span>
+                )}
+              </div>
+              <blockquote className="citacaoTrecho">"{c.trecho}"</blockquote>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

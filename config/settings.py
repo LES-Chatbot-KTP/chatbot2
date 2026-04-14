@@ -3,9 +3,10 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(encoding="utf-8")   # ← ESSA LINHA É A SOLUÇÃO
+    load_dotenv(encoding="utf-8")
 except ImportError:
     pass
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.getenv("SECRET_KEY", "django-insecure-substitua-em-producao")
@@ -60,13 +61,14 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": "chatbot",
-        "USER": "chatbot_user",
-        "PASSWORD": "chatbot2026",
-        "HOST": "127.0.0.1",
-        "PORT": "5555",      # <-- A porta nova aqui!
+        "NAME": os.getenv("POSTGRES_DB", "chatbot"),
+        "USER": os.getenv("POSTGRES_USER", "chatbot_user"),
+        "PASSWORD": os.getenv("POSTGRES_PASSWORD", "chatbot_pass"),
+        "HOST": os.getenv("DB_HOST", "localhost"),
+        "PORT": os.getenv("DB_PORT", "5433"),
     }
 }
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
@@ -88,5 +90,11 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-1.5-flash")
-EMBEDDING_MODEL = "embedding-001"
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+
+# Número de chunks finais enviados ao LLM como contexto
 TOP_K = int(os.getenv("TOP_K", 5))
+
+# Candidatos buscados no pgvector antes do re-ranking MMR (deve ser > TOP_K)
+# Valores maiores melhoram a diversidade do contexto ao custo de mais memória
+RERANK_FETCH_K = int(os.getenv("RERANK_FETCH_K", TOP_K * 4))
