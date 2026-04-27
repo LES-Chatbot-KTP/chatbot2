@@ -7,7 +7,7 @@ import google.generativeai as genai
 from django.conf import settings
 
 from Backend.app.application.embedding_provider import EmbeddingProvider
-from Backend.app.documents.models import Conversa, Mensagem, Documento
+from Backend.app.documents.models import Conversa, Mensagem, Documento, ChunkDocumento
 from Backend.app.domain.repositories.chunk_repository import ChunkRepository
 
 # Instrui o modelo a responder sempre com citações explícitas do documento de origem
@@ -52,6 +52,10 @@ _MENSAGEM_CLARIFICACAO = (
     "Sua pergunta pode se referir a mais de um documento. "
     "Para responder com precisão, por favor escolha o contexto desejado:"
 )
+_MENSAGEM_COTA_API = (
+    "A cota da API Gemini foi excedida no momento. "
+    "Aguarde alguns minutos e tente novamente."
+)
 
 # Tamanho máximo do trecho de citação exibido no frontend
 _TRECHO_MAX_CHARS = 220
@@ -75,6 +79,28 @@ def preprocessar_pergunta(texto: str) -> str:
     return texto
 
 
+def gerar_titulo_conversa(pergunta: str, max_palavras: int = 8) -> str:
+    """Gera um título curto e legível a partir da primeira pergunta útil."""
+    pergunta = preprocessar_pergunta(pergunta)
+    palavras_pra_ignorar = {
+        "oi", "olá", "ola", "bom", "dia", "boa", "tarde", "noite",
+        "obrigado", "obrigada", "valeu", "por", "favor", "me",
+        "qual", "quais", "quando", "onde", "como", "quem", "que",
+        "o", "a", "os", "as", "um", "uma", "pra", "pro", "para",
+    }
+    palavras = [
+        palavra for palavra in re.findall(r"[\wáéíóúãõâêôç]+", pergunta, flags=re.IGNORECASE)
+        if palavra not in palavras_pra_ignorar
+    ]
+    if not palavras:
+        return "Nova conversa"
+    titulo = " ".join(palavras[:max_palavras]).strip()
+    if len(palavras) > max_palavras:
+        titulo += "..."
+    titulo = titulo.rstrip("?!.:,;")
+    return titulo[:1].upper() + titulo[1:]
+
+
 def _nao_soube_responder(texto: str) -> bool:
     """Verifica se o modelo indicou que não encontrou resposta no contexto."""
     texto_lower = texto.lower()
@@ -96,6 +122,55 @@ def _extrair_trecho(conteudo: str, max_chars: int = _TRECHO_MAX_CHARS) -> str:
 def _label_pagina(numero_pagina: Optional[int]) -> str:
     """Retorna a label de página para o contexto do prompt."""
     return f"Página {numero_pagina}" if numero_pagina else "Página N/A"
+
+
+# ─── Tratamento de cota da API e fallback textual ────────────────────────────
+
+def _is_quota_error(exc: Exception) -> bool:
+    texto = str(exc).lower()
+    return "quota exceeded" in texto or "resource_exhausted" in texto or "429" in texto
+
+
+def _candidates_by_keyword(pergunta: str, fetch_k: int) -> List[dict]:
+    """Fallback semântico quando embedding está indisponível por cota."""
+    tokens = [
+        t for t in re.findall(r"[\wáéíóúãõâêôç]+", pergunta.lower(), flags=re.IGNORECASE)
+        if len(t) >= 3
+    ]
+    if not tokens:
+        return []
+
+    seen_ids = set()
+    candidatos: List[dict] = []
+
+    for token in tokens:
+        if len(candidatos) >= fetch_k:
+            break
+        chunks = (
+            ChunkDocumento.objects
+            .select_related("documento")
+            .filter(conteudo__icontains=token)
+            .exclude(id__in=seen_ids)
+            .order_by("id")[: max(1, fetch_k // max(1, len(tokens)))]
+        )
+        for c in chunks:
+            seen_ids.add(c.id)
+            score = 0.4 + min(0.5, len(token) / 20)
+            candidatos.append(
+                {
+                    "id": c.id,
+                    "conteudo": c.conteudo,
+                    "numero_pagina": c.numero_pagina,
+                    "documento_id": c.documento_id,
+                    "documento_nome": c.documento.nome,
+                    "score": float(score),
+                    "embedding": [],
+                }
+            )
+            if len(candidatos) >= fetch_k:
+                break
+
+    return candidatos
 
 
 # ─── Detecção de ambiguidade ─────────────────────────────────────────────────
@@ -280,15 +355,20 @@ class ResponderPergunta:
             return self._sem_resposta(_MENSAGEM_ERRO_API)
 
         try:
-            # 1. Embedding da query
-            query_embedding = self._embedding_provider.embed(
-                pergunta_processada,
-                task_type="retrieval_query",
-            )
-
-            # 2. Busca vetorial com mais candidatos para re-ranking
             fetch_k = getattr(settings, "RERANK_FETCH_K", settings.TOP_K * 4)
-            candidates = self._chunk_repo.buscar_candidatos(query_embedding, fetch_k)
+
+            # 1) Tenta embedding + busca vetorial; se quota estourar, cai para busca textual
+            try:
+                query_embedding = self._embedding_provider.embed(
+                    pergunta_processada,
+                    task_type="retrieval_query",
+                )
+                candidates = self._chunk_repo.buscar_candidatos(query_embedding, fetch_k)
+            except Exception as exc:
+                if _is_quota_error(exc):
+                    candidates = _candidates_by_keyword(pergunta_processada, fetch_k)
+                else:
+                    return self._sem_resposta(_MENSAGEM_ERRO_API)
 
             if not candidates:
                 return self._sem_resposta(_MENSAGEM_SEM_DOCUMENTOS)
@@ -319,8 +399,20 @@ class ResponderPergunta:
             )
 
             genai.configure(api_key=settings.GEMINI_API_KEY)
-            model = genai.GenerativeModel(settings.CHAT_MODEL)
-            resposta_texto = model.generate_content(prompt).text
+            try:
+                model = genai.GenerativeModel(settings.CHAT_MODEL)
+                resposta_texto = model.generate_content(prompt).text
+            except Exception as exc:
+                if _is_quota_error(exc):
+                    try:
+                        model = genai.GenerativeModel("models/gemini-flash-latest")
+                        resposta_texto = model.generate_content(prompt).text
+                    except Exception as exc2:
+                        if _is_quota_error(exc2):
+                            return self._sem_resposta(_MENSAGEM_COTA_API)
+                        return self._sem_resposta(_MENSAGEM_ERRO_API)
+                else:
+                    return self._sem_resposta(_MENSAGEM_ERRO_API)
 
             # 7. Detecta resposta vazia/negativa
             if _nao_soube_responder(resposta_texto):
@@ -339,7 +431,9 @@ class ResponderPergunta:
                 "opcoes_clarificacao": [],
             }
 
-        except Exception:
+        except Exception as exc:
+            if _is_quota_error(exc):
+                return self._sem_resposta(_MENSAGEM_COTA_API)
             return self._sem_resposta(_MENSAGEM_ERRO_API)
 
     # ─── Helpers ──────────────────────────────────────────────────────────────

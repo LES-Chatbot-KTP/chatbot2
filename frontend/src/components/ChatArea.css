@@ -453,3 +453,38 @@
   color: rgba(238, 238, 238, 0.7);
   font-style: italic;
 }
+
+/* ── Feedback (avaliação da resposta) ───────────────────── */
+.feedbackArea {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 0.85rem;
+}
+
+.feedbackPergunta {
+  color: #a0a0a0;
+}
+
+.feedbackObrigado {
+  color: #4caf50;
+  font-style: italic;
+}
+
+.feedbackArea button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.1rem;
+  opacity: 0.6;
+  transition: transform 0.2s, opacity 0.2s;
+  padding: 0;
+}
+
+.feedbackArea button:hover {
+  opacity: 1;
+  transform: scale(1.2);
+}

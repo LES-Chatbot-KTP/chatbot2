@@ -5,6 +5,7 @@ import Chat from "./pages/Chat";
 import BaseDeConhecimento from "./pages/BaseDeConhecimento";
 import Metricas from "./pages/Metricas";
 import { authService } from "./services/authService";
+import Historico from "./pages/Historico";
 
 function RotaProtegida({ children }) {
   return authService.isAuthenticated() ? children : <Navigate to="/" replace />;
@@ -19,6 +20,7 @@ function App() {
         <Route path="/admin" element={<RotaProtegida><Chat /></RotaProtegida>} />
         <Route path="/admin/base-de-conhecimento" element={<RotaProtegida><BaseDeConhecimento /></RotaProtegida>} />
         <Route path="/admin/metricas" element={<RotaProtegida><Metricas /></RotaProtegida>} />
+        <Route path="/admin/historico" element={<RotaProtegida><Historico /></RotaProtegida>} />
       </Routes>
     </BrowserRouter>
   );

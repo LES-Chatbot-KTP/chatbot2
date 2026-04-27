@@ -107,6 +107,7 @@ class Profile(models.Model):
 class Conversa(models.Model):
     """Representa uma sessão de chat entre um usuário e o chatbot."""
     user       = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
+    titulo      = models.CharField(max_length=255, blank=True, default="")
     iniciada_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -114,7 +115,7 @@ class Conversa(models.Model):
         ordering  = ["-iniciada_em"]
 
     def __str__(self):
-        return f"Conversa #{self.id} — {self.user}"
+        return self.titulo or f"Conversa #{self.id} — {self.user}"
 class Mensagem(models.Model):
     ROLES = [
         ("user",      "Usuário"),
@@ -130,6 +131,8 @@ class Mensagem(models.Model):
                                blank=True,
                                related_name="mensagens_origem",
                            )
+    nota = models.IntegerField(null=True, blank=True, help_text="Nota de 1 a 5, ou 1 para Like e -1 para Dislike")
+    comentario = models.TextField(null=True, blank=True)
     criada_em            = models.DateTimeField(auto_now_add=True)
 
     class Meta:

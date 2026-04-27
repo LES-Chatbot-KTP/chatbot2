@@ -3,9 +3,15 @@ from pathlib import Path
 
 try:
     from dotenv import load_dotenv
-    load_dotenv(encoding="utf-8")
+    # Force values from .env to avoid stale OS/session env vars overriding DB config.
+    load_dotenv(encoding="utf-8", override=True)
 except ImportError:
     pass
+
+
+def _normalize_gemini_model(value: str, default: str) -> str:
+    model = os.getenv(value, default)
+    return model if model.startswith("models/") else f"models/{model}"
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -89,8 +95,8 @@ STATIC_URL = "/static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-CHAT_MODEL = os.getenv("CHAT_MODEL", "gemini-1.5-flash")
-EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/text-embedding-004")
+CHAT_MODEL = _normalize_gemini_model("CHAT_MODEL", "gemini-flash-latest")
+EMBEDDING_MODEL = _normalize_gemini_model("EMBEDDING_MODEL", "text-embedding-004")
 
 # Número de chunks finais enviados ao LLM como contexto
 TOP_K = int(os.getenv("TOP_K", 5))

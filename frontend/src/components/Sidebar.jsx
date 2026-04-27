@@ -7,18 +7,39 @@ import historico   from "../assets/images/historico.svg";
 import basedeconhec from "../assets/images/basedeconhecimento.svg";
 import metricas    from "../assets/images/metricas.svg";
 
+import { useLocation } from "react-router-dom";
 import { useNavigate } from "react-router-dom";
 import { authService } from "../services/authService";
 import api from "../services/api";
 
 export default function Sidebar({ tipo }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [usuario, setUsuario] = useState(null);
+  
+  // Estado para guardar o histórico real
+  const [conversasRecentes, setConversasRecentes] = useState([]);
 
   useEffect(() => {
+    if (!authService.isAuthenticated()) {
+      setUsuario(null);
+      setConversasRecentes([]);
+      return;
+    }
+
+    // Busca dados do usuário
     api.get("/api/users/me/")
       .then((res) => setUsuario(res.data))
       .catch(() => setUsuario(null));
+
+    // Busca o histórico de conversas
+    api.get("/api/chat/historico/periodo/")
+      .then((res) => {
+        if (res.data && res.data.conversas) {
+          setConversasRecentes(res.data.conversas);
+        }
+      })
+      .catch((err) => console.error("Erro ao buscar histórico:", err));
   }, []);
 
   function handleLogout() {
@@ -29,38 +50,44 @@ export default function Sidebar({ tipo }) {
   const nomeExibido = usuario?.username || "...";
   const inicial = nomeExibido[0]?.toUpperCase() || "?";
 
+  // Formatar a data
+  const formatarData = (dataString) => {
+    const data = new Date(dataString);
+    return data.toLocaleDateString("pt-BR", { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  };
+
   return (
     <div className="sidebar">
       <div className="item header">
         <div className="esquerda">
-          <img src={logo} className="icon" />
+          <img src={logo} className="icon" alt="Logo" />
           <span>ChatBOT</span>
         </div>
         <div className="direita">
-          <img src={hideSidebar} className="icon" />
+          <img src={hideSidebar} className="icon" alt="Esconder Sidebar" />
         </div>
       </div>
 
       <div className="menuTop">
         <div className="item menu" onClick={() => navigate("/admin")}>
-          <img src={novoChat} className="icon" />
+          <img src={novoChat} className="icon" alt="Novo Chat" />
           <span>Novo Chat</span>
         </div>
 
         {tipo === "admin" && (
           <>
             <div className="item menu" onClick={() => navigate("/admin/base-de-conhecimento")}>
-              <img src={basedeconhec} className="icon" />
+              <img src={basedeconhec} className="icon" alt="Base" />
               <span>Base de conhecimento</span>
             </div>
 
             <div className="item menu" onClick={() => navigate("/admin/metricas")}>
-              <img src={metricas} className="icon" />
+              <img src={metricas} className="icon" alt="Métricas" />
               <span>Métricas</span>
             </div>
 
-            <div className="item menu">
-              <img src={historico} className="icon" />
+            <div className="item menu" onClick={() => navigate("/admin/historico")}>
+              <img src={historico} className="icon" alt="Histórico" />
               <span>Histórico</span>
             </div>
           </>
@@ -69,11 +96,29 @@ export default function Sidebar({ tipo }) {
 
       <div className="chats">
         <div className="miniTitulo">Seus chats</div>
-        <div className="chatItem">Chat sobre IA</div>
-        <div className="chatItem">Banco de dados</div>
-        <div className="chatItem">Projeto TCC</div>
-        <div className="chatItem">Teste</div>
-        <div className="chatItem">Teste 123</div>
+        
+        {/* Renderiza os chats reais */}
+        {conversasRecentes.length > 0 ? (
+          conversasRecentes.map((conv) => (
+            <div 
+              key={conv.id} 
+              className="chatItem"
+              onClick={() => navigate(`/admin?conversa=${conv.id}`)} 
+              style={{
+                backgroundColor:
+                  location.pathname === "/admin" && new URLSearchParams(location.search).get("conversa") === String(conv.id)
+                    ? "rgba(255, 255, 255, 0.06)"
+                    : "transparent",
+              }}
+            >
+              {conv.titulo || `Chat ${formatarData(conv.iniciada_em)}`}
+            </div>
+          ))
+        ) : (
+          <div className="chatItem" style={{ opacity: 0.6, cursor: "default" }}>
+            Nenhuma conversa ainda
+          </div>
+        )}
       </div>
 
       <div className="perfil">

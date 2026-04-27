@@ -3,6 +3,8 @@ Implementação PostgreSQL do repositório de documentos.
 Repository Pattern — ConcreteRepository usando Django ORM + PostgreSQL.
 """
 
+from django.db.models import Count, Q
+
 from Backend.app.domain.repositories.document_repository import DocumentRepository
 from Backend.app.documents.models import Documento, ChunkDocumento
 
@@ -29,11 +31,34 @@ class PostgresDocumentRepository(DocumentRepository):
         return True
 
     def list_all(self) -> list:
-        return list(
-            Documento.objects.all().values(
-                "id", "nome", "tipo", "caminho_arquivo", "indexado_em"
+        docs = (
+            Documento.objects
+            .annotate(
+                total_chunks=Count("chunks", distinct=True),
+                indexed_chunks=Count(
+                    "chunks",
+                    filter=Q(chunks__embedding__isnull=False),
+                    distinct=True,
+                ),
             )
+            .values(
+                "id",
+                "nome",
+                "tipo",
+                "caminho_arquivo",
+                "indexado_em",
+                "atualizado_em",
+                "total_chunks",
+                "indexed_chunks",
+            )
+            .order_by("-atualizado_em")
         )
+
+        resultado = []
+        for doc in docs:
+            status = "indexado" if doc["indexed_chunks"] > 0 else "pendente"
+            resultado.append({**doc, "status": status})
+        return resultado
 
     def update(self, id_documento: int, campos: dict) -> dict | None:
         documento = self.get_by_id(id_documento)
