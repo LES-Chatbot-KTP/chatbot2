@@ -1,11 +1,60 @@
 import "./ConhecimentoArea.css";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Documento from "./Documento";
+import api from "../services/api.jsx";
+import { authService } from "../services/authService";
 
 import recarregar from "../assets/images/reload.svg";
 
 export default function ConhecimentoArea() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [documentos, setDocumentos] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!authService.isAuthenticated()) {
+      setLoading(false);
+      setDocumentos([]);
+      return;
+    }
+
+    api
+      .get("/api/documents/")
+      .then((res) => {
+        setDocumentos(res.data?.documentos ?? []);
+      })
+      .catch((err) => {
+        console.error("Erro ao buscar documentos:", err);
+        setDocumentos([]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const resumo = useMemo(() => {
+    const total = documentos.length;
+    const indexados = documentos.filter((d) => d.status === "indexado").length;
+    const pendentes = total - indexados;
+    const ultimaAtualizacao = documentos.length
+      ? new Date(documentos[0].atualizado_em).toLocaleDateString("pt-BR")
+      : "-";
+    return { total, indexados, pendentes, ultimaAtualizacao };
+  }, [documentos]);
+
+  function formatarTipo(tipo) {
+    if (tipo === "portaria") return "Portaria";
+    if (tipo === "resolucao") return "Resolução";
+    if (tipo === "rod") return "ROD";
+    return tipo || "-";
+  }
+
+  function formatarData(dataIso) {
+    if (!dataIso) return "-";
+    const d = new Date(dataIso);
+    return `${d.toLocaleDateString("pt-BR")} ${d.toLocaleTimeString("pt-BR", {
+      hour: "2-digit",
+      minute: "2-digit",
+    })}`;
+  }
 
   return (
     <div className="conhecArea">
@@ -19,19 +68,19 @@ export default function ConhecimentoArea() {
       <div className="dadosDoc">
         <div className="cardDados">
           <h2>Total de Documentos</h2>
-          <h2>0</h2>
+          <h2>{resumo.total}</h2>
         </div>
         <div className="cardDados">
           <h2>Última Atualização</h2>
-          <h2>21/02/2026</h2>
+          <h2>{resumo.ultimaAtualizacao}</h2>
         </div>
         <div className="cardDados">
           <h2>Indexados</h2>
-          <h2>0</h2>
+          <h2>{resumo.indexados}</h2>
         </div>
         <div className="cardDados">
           <h2>Pendentes</h2>
-          <h2>0</h2>
+          <h2>{resumo.pendentes}</h2>
         </div>
       </div>
 
@@ -46,29 +95,27 @@ export default function ConhecimentoArea() {
           </div>
 
           <div className="listaScroll">
-            <Documento
-              titulo="Banco de dados"
-              categoria="TI"
-              dataCriacao="10/01/2026"
-              ultimaAtualizacao="22/03/2026 10:00"
-              status="pendente"
-            />
-
-            <Documento
-              titulo="Machine Learning"
-              categoria="IA"
-              dataCriacao="05/02/2026"
-              ultimaAtualizacao="22/03/2026 11:30"
-              status="indexado"
-            />
-
-            <Documento
-              titulo="React Hooks"
-              categoria="Front-end"
-              dataCriacao="15/02/2026"
-              ultimaAtualizacao="22/03/2026 12:10"
-              status="indexado"
-            />
+            {loading ? (
+              <div className="documento" style={{ opacity: 0.8 }}>
+                Carregando documentos reais...
+              </div>
+            ) : documentos.length === 0 ? (
+              <div className="documento" style={{ opacity: 0.8 }}>
+                Nenhum documento encontrado no banco.
+              </div>
+            ) : (
+              documentos.map((doc) => (
+                <Documento
+                  key={doc.id}
+                  titulo={doc.nome}
+                  conteudo={`(${doc.total_chunks} chunks)`}
+                  categoria={formatarTipo(doc.tipo)}
+                  dataCriacao={formatarData(doc.indexado_em)}
+                  ultimaAtualizacao={formatarData(doc.atualizado_em)}
+                  status={doc.status}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>

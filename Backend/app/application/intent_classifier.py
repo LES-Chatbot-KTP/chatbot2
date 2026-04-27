@@ -12,11 +12,12 @@ def classificar_intencao(pergunta: str) -> str:
     pergunta_limpa = pergunta.lower().strip()
     if pergunta_limpa in ['oi', 'ola', 'olá', 'bom dia', 'boa tarde']:
         return "SAUDACAO"
+    if pergunta_limpa in ['obrigado', 'obrigada', 'valeu', 'muito obrigado', 'muito obrigada', 'agradecido', 'agradecida']:
+        return "AGRADECIMENTO"
 
     try:
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        # Usamos o nome completo do modelo para a v1beta não reclamar
-        model = genai.GenerativeModel('models/gemini-1.5-flash')
+        model = genai.GenerativeModel(settings.CHAT_MODEL)
         
         prompt = (
             f"Classifique a intenção: '{pergunta}'\n"

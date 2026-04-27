@@ -100,8 +100,8 @@ class Command(BaseCommand):
                 self.stdout.write(f"  📄 Indexando: {pdf_path.name}")
 
                 try:
-                    texto = self._extrair_texto(pdf_path, pypdf)
-                    chunks = self._criar_chunks(texto)
+                    paginas = self._extrair_paginas(pdf_path, pypdf)
+                    chunks = self._criar_chunks_por_pagina(paginas)
 
                     doc, _ = Documento.objects.update_or_create(
                         caminho_arquivo=caminho_str,
@@ -115,15 +115,16 @@ class Command(BaseCommand):
                     if forcar:
                         doc.chunks.all().delete()
 
-                    for i, chunk_texto in enumerate(chunks):
+                    for i, chunk in enumerate(chunks):
                         embedding = None
                         if gerar_embeddings and embedding_provider:
-                            embedding = self._gerar_embedding(embedding_provider, chunk_texto)
+                            embedding = self._gerar_embedding(embedding_provider, chunk["conteudo"])
 
                         ChunkDocumento.objects.create(
                             documento=doc,
                             numero_chunk=i,
-                            conteudo=chunk_texto,
+                            numero_pagina=chunk["numero_pagina"],
+                            conteudo=chunk["conteudo"],
                             embedding=embedding,
                         )
 
@@ -142,30 +143,37 @@ class Command(BaseCommand):
 
     # ─── Helpers ──────────────────────────────────────────────────────────────
 
-    def _extrair_texto(self, pdf_path: Path, pypdf) -> str:
-        """Extrai todo o texto de um PDF."""
-        texto = []
+    def _extrair_paginas(self, pdf_path: Path, pypdf) -> list[dict]:
+        """Extrai texto por página de um PDF, preservando o número da página."""
+        paginas = []
         with open(pdf_path, "rb") as f:
             reader = pypdf.PdfReader(f)
-            for pagina in reader.pages:
-                t = pagina.extract_text()
-                if t:
-                    texto.append(t)
-        return "\n".join(texto)
+            for indice, pagina in enumerate(reader.pages, start=1):
+                texto = (pagina.extract_text() or "").strip()
+                if texto:
+                    paginas.append({"numero_pagina": indice, "conteudo": texto})
+        return paginas
 
-    def _criar_chunks(self, texto: str) -> list[str]:
-        """Divide o texto em chunks com sobreposição."""
-        if not texto.strip():
+    def _criar_chunks_por_pagina(self, paginas: list[dict]) -> list[dict]:
+        """Divide o texto em chunks com sobreposição mantendo origem da página."""
+        if not paginas:
             return []
 
         chunks = []
-        inicio = 0
-        while inicio < len(texto):
-            fim = inicio + CHUNK_SIZE
-            chunk = texto[inicio:fim]
-            if chunk.strip():
-                chunks.append(chunk.strip())
-            inicio += CHUNK_SIZE - CHUNK_OVERLAP
+        for pagina in paginas:
+            texto = pagina["conteudo"]
+            inicio = 0
+            while inicio < len(texto):
+                fim = inicio + CHUNK_SIZE
+                chunk = texto[inicio:fim]
+                if chunk.strip():
+                    chunks.append(
+                        {
+                            "numero_pagina": pagina["numero_pagina"],
+                            "conteudo": chunk.strip(),
+                        }
+                    )
+                inicio += CHUNK_SIZE - CHUNK_OVERLAP
 
         return chunks
 

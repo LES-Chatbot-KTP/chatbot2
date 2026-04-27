@@ -12,6 +12,12 @@ from django.conf import settings
 import google.generativeai as genai
 from Backend.app.documents.models import Documento, ChunkDocumento
 
+PASTA_PARA_TIPO = {
+    "portarias": "portaria",
+    "resolucoes": "resolucao",
+    "rod": "rod",
+}
+
 genai.configure(api_key=settings.GEMINI_API_KEY)
 
 print("Buscando modelos disponíveis na sua chave da API...")
@@ -51,11 +57,14 @@ for pasta in pastas:
             continue
         
         nome_doc = arquivo.replace(".pdf", "")
-        doc = Documento.objects.filter(nome=nome_doc).first()
-        
-        if not doc:
-            continue
-            
+        doc, _ = Documento.objects.update_or_create(
+            caminho_arquivo=os.path.join(caminho_pasta, arquivo),
+            defaults={
+                "nome": nome_doc,
+                "tipo": PASTA_PARA_TIPO[pasta],
+            },
+        )
+
         if ChunkDocumento.objects.filter(documento=doc).exists():
             continue
 
@@ -64,35 +73,36 @@ for pasta in pastas:
         
         try:
             reader = PdfReader(caminho_completo)
-            texto_completo = ""
-            for page in reader.pages:
-                texto = page.extract_text()
-                if texto:
-                    texto_completo += texto + "\n"
-            
-            pedacos = fatiar_texto(texto_completo)
-            pedacos_validos = [p for p in pedacos if len(p.strip()) >= 10]
-            
-            if not pedacos_validos:
+            pedacos_com_pagina = []
+            for numero_pagina, page in enumerate(reader.pages, start=1):
+                texto = (page.extract_text() or "").strip()
+                if not texto:
+                    continue
+                pedacos = fatiar_texto(texto)
+                for pedaco in pedacos:
+                    if len(pedaco.strip()) >= 10:
+                        pedacos_com_pagina.append((pedaco, numero_pagina))
+
+            if not pedacos_com_pagina:
                 continue
                 
             # Chamada usando a biblioteca clássica que não dá erro 404
-            result = genai.embed_content(
-                model=modelo_embedding,
-                content=pedacos_validos
-            )
-            
-            embeddings = result['embedding']
-            
-            for i, pedaco in enumerate(pedacos_validos):
+            for i, (pedaco, numero_pagina) in enumerate(pedacos_com_pagina):
+                result = genai.embed_content(
+                    model=modelo_embedding,
+                    content=pedaco,
+                )
+                embedding = result["embedding"]
+
                 ChunkDocumento.objects.create(
                     documento=doc,
                     numero_chunk=i+1,
+                    numero_pagina=numero_pagina,
                     conteudo=pedaco,
-                    embedding=embeddings[i]
+                    embedding=embedding,
                 )
                 
-            print(f"✅ {len(pedacos_validos)} chunks criados para {arquivo}")
+            print(f"✅ {len(pedacos_com_pagina)} chunks criados para {arquivo}")
             
             # Pausa de 2 segundinhos para a API gratuita do Google não bloquear a gente
             time.sleep(2)

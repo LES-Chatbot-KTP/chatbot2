@@ -5,12 +5,20 @@ from rest_framework.permissions import AllowAny
 
 from Backend.app.application.answer_question import (
     iniciar_conversa,
+    gerar_titulo_conversa,
     registrar_mensagem,
     registrar_resposta,
 )
+from Backend.app.application.intent_classifier import (
+    RESPOSTAS_DIRETAS,
+    classificar_intencao,
+)
 from Backend.app.api.factories import ChatFactory
 from Backend.app.documents.models import Conversa, Mensagem
-
+from django.utils.dateparse import parse_date
+from django.db.models import Count, Avg
+from django.utils import timezone
+import datetime
 
 class ChatIniciarView(APIView):
     """
@@ -47,6 +55,44 @@ class ChatPerguntaView(APIView):
                 {"error": "O campo 'question' é obrigatório."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        if not question or len(question) < 2:
+            return Response(
+                {"error": "A pergunta não pode estar vazia ou ser muito curta."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        intencao = classificar_intencao(question)
+
+        if intencao in RESPOSTAS_DIRETAS:
+            if conversa_id:
+                try:
+                    conversa = Conversa.objects.get(id=conversa_id)
+                except Conversa.DoesNotExist:
+                    return Response(
+                        {"error": "Conversa não encontrada."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            else:
+                user = request.user if request.user.is_authenticated else None
+                conversa = iniciar_conversa(user=user)
+
+            mensagem = registrar_mensagem(conversa, question)
+            resposta_msg = registrar_resposta(conversa, RESPOSTAS_DIRETAS[intencao])
+
+            return Response(
+                {
+                    "conversa_id": conversa.id,
+                    "mensagem_id": resposta_msg.id,
+                    "pergunta_original": mensagem.conteudo_original,
+                    "pergunta_processada": mensagem.conteudo_processado,
+                    "answer": RESPOSTAS_DIRETAS[intencao],
+                    "fontes": [],
+                    "citacoes": [],
+                    "respondida": True,
+                    "intencao": intencao,
+                },
+                status=status.HTTP_200_OK,
+            )
 
         # Busca conversa existente ou cria uma nova
         if conversa_id:
@@ -64,10 +110,16 @@ class ChatPerguntaView(APIView):
         # Registra pergunta original (#36) e processada (#37)
         mensagem = registrar_mensagem(conversa, question)
 
-        # Gera e registra resposta via pipeline RAG
+        if not conversa.titulo or conversa.titulo == "Nova conversa":
+            conversa.titulo = gerar_titulo_conversa(question)
+            conversa.save(update_fields=["titulo"])
+
+       # Gera e registra resposta via pipeline RAG
         responder = ChatFactory.make_responder()
         resultado = responder.executar(mensagem.conteudo_processado)
-        registrar_resposta(
+        
+        # 1. CAPTURE O RETORNO AQUI NESSA VARIÁVEL:
+        resposta_msg = registrar_resposta(
             conversa,
             resultado["resposta"],
             ids_fontes=[f["id"] for f in resultado["fontes"]],
@@ -76,6 +128,7 @@ class ChatPerguntaView(APIView):
         return Response(
             {
                 "conversa_id":          conversa.id,
+                "mensagem_id":          resposta_msg.id,  # 2. ADICIONE ESSA LINHA PARA O REACT LER
                 "pergunta_original":    mensagem.conteudo_original,
                 "pergunta_processada":  mensagem.conteudo_processado,
                 "answer":               resultado["resposta"],
@@ -118,4 +171,99 @@ class ChatHistoricoView(APIView):
             }
             for m in mensagens
         ]
-        return Response({"conversa_id": conversa_id, "mensagens": data})
+        return Response({"conversa_id": conversa_id, "titulo": conversa.titulo, "mensagens": data})
+class ChatHistoricoPeriodoView(APIView):
+    permission_classes = [AllowAny] # Mude para IsAuthenticated se apenas admins puderem ver
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        conversas = Conversa.objects.all()
+
+        if start_date:
+            parsed_start = parse_date(start_date)
+            if parsed_start:
+                conversas = conversas.filter(iniciada_em__date__gte=parsed_start)
+
+        if end_date:
+            parsed_end = parse_date(end_date)
+            if parsed_end:
+                conversas = conversas.filter(iniciada_em__date__lte=parsed_end)
+
+        # Retorna as conversas ordenadas da mais recente para a mais antiga
+        data = [
+            {
+                "id": c.id,
+                "titulo": c.titulo,
+                "iniciada_em": c.iniciada_em,
+                "total_mensagens": c.mensagens.count()
+            } for c in conversas.order_by('-iniciada_em')
+        ]
+
+        return Response({"conversas": data}, status=status.HTTP_200_OK)
+    
+class MensagemFeedbackView(APIView):
+    """
+    PATCH /api/chat/mensagem/<id>/feedback/
+    Recebe a nota (like/dislike) e comentário para uma resposta específica.
+    """
+    permission_classes = [AllowAny]
+
+    def patch(self, request, mensagem_id):
+        try:
+            # Garante que só dá pra avaliar mensagens da IA
+            mensagem = Mensagem.objects.get(id=mensagem_id, role="assistant")
+        except Mensagem.DoesNotExist:
+            return Response(
+                {"error": "Mensagem do assistente não encontrada."}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        nota = request.data.get("nota")
+        comentario = request.data.get("comentario")
+
+        if nota is not None:
+            mensagem.nota = int(nota)
+        if comentario is not None:
+            mensagem.comentario = str(comentario)
+            
+        mensagem.save()
+
+        return Response({"message": "Feedback salvo com sucesso!"}, status=status.HTTP_200_OK)
+    
+class ChatMetricasView(APIView):
+    """
+    GET /api/chat/metricas/
+    Retorna estatísticas gerais para o dashboard de métricas.
+    """
+    permission_classes = [AllowAny] 
+
+    def get(self, request):
+        total_conversas = Conversa.objects.count()
+        total_mensagens = Mensagem.objects.count()
+        
+        # Média das notas (Issue 4)
+        media_notas = Mensagem.objects.filter(role="assistant").exclude(nota=None).aggregate(Avg('nota'))['nota__avg'] or 0
+        
+        # Contagem de feedbacks positivos e negativos
+        positivos = Mensagem.objects.filter(role="assistant", nota=1).count()
+        negativos = Mensagem.objects.filter(role="assistant", nota=-1).count()
+
+        # Estatística de conversas nos últimos 7 dias para o gráfico
+        sete_dias_atras = timezone.now() - datetime.timedelta(days=7)
+        conversas_por_dia = (
+            Conversa.objects.filter(iniciada_em__gte=sete_dias_atras)
+            .values('iniciada_em__date')
+            .annotate(total=Count('id'))
+            .order_by('iniciada_em__date')
+        )
+
+        return Response({
+            "total_conversas": total_conversas,
+            "total_mensagens": total_mensagens,
+            "media_notas": round(float(media_notas), 2),
+            "feedbacks_positivos": positivos,
+            "feedbacks_negativos": negativos,
+            "grafico": list(conversas_por_dia)
+        }, status=status.HTTP_200_OK)
